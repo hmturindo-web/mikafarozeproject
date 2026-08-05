@@ -9,7 +9,7 @@ const sql = postgres({
   host: 'db.abaluqlwslhafelhrmuz.supabase.co',
   database: 'postgres',
   user: 'postgres',
-  password: 'Abal123',
+  password: 'ZKAcSbgM7TyIJN8m',
   port: 5432,
   ssl: 'require',
   connect_timeout: 10,

@@ -24,14 +24,22 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-// postgres-js connection (same workaround as seed script)
+// postgres-js connection — parses DATABASE_URL to handle Windows username bug
 function getDb() {
-  const host = process.env.DB_HOST     || 'db.abaluqlwslhafelhrmuz.supabase.co';
-  const port = parseInt(process.env.DB_PORT || '5432');
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_URL env var not set');
+
+  const match = url.match(/postgresql:\/\/([^:]+):([^@]+)@([^:]+):?(\d*)\/?/);
+  if (!match) throw new Error('Invalid DATABASE_URL format');
+
+  const [, user, password, host, port = '5432'] = match;
   return postgres({
     host, database: 'postgres',
-    user: 'postgres', password: process.env.DB_PASSWORD || 'Abal123',
-    port, ssl: 'require', connect_timeout: 10,
+    user, password,
+    port: parseInt(port),
+    ssl: 'require',
+    connect_timeout: 10,
+    max: 10,
   });
 }
 
