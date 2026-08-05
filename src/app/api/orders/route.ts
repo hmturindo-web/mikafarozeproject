@@ -1,6 +1,7 @@
 // ============================================
 // MIKAFAROZE — Order API Route
-// POST /api/orders — Create new order
+// POST /api/orders — Create order + trigger AI generation
+// GET  /api/orders — List user's orders
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,7 +9,13 @@ import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
-// Validation schema
+// AI Services
+import { generateImage as kieGenerateImage } from '@/server/services/kie-ai';
+import { generateCopy as kieGenerateCopy } from '@/server/services/kie-ai';
+import { generateVideo as falGenerateVideo } from '@/server/services/fal-ai';
+import { generateShortFilm as falGenerateShortFilm } from '@/server/services/fal-ai';
+
+// ── Validation schema ─────────────────────────────────────────────────────────
 const OrderSchema = z.object({
   packageId: z.string(),
   serviceType: z.enum(['IMAGE', 'VIDEO', 'SHORT_FILM', 'COPY']),
@@ -34,6 +41,84 @@ const OrderSchema = z.object({
   }),
 });
 
+// ── AI Generation Router ─────────────────────────────────────────────────────
+async function runAIGeneration(serviceType: string, brief: Record<string, unknown>) {
+  switch (serviceType) {
+    case 'IMAGE': {
+      const result = await kieGenerateImage({
+        brandName:       brief.brandName as string,
+        industry:        brief.industry as string,
+        style:           (brief.imageStyle as string) || 'modern',
+        colorPreference: brief.colorPreference as string[] | undefined,
+        platform:        (brief.imagePlatform as string[] | undefined)?.join(', '),
+      });
+      return {
+        outputUrl: result.imageUrl,
+        jobId: result.jobId,
+        creditsUsed: result.creditsUsed,
+        outputType: 'image',
+      };
+    }
+
+    case 'VIDEO': {
+      const result = await falGenerateVideo({
+        brandName: brief.brandName as string,
+        industry:  brief.industry as string,
+        duration:  (brief.videoDuration as number) || 30,
+        format:    (brief.videoFormat as 'vertical' | 'horizontal' | 'square') || 'vertical',
+        script:    brief.script as string | undefined,
+      });
+      return {
+        outputUrl: result.videoUrl,
+        jobId: result.jobId,
+        creditsUsed: 0, // Fal.ai billed separately
+        outputType: 'video',
+      };
+    }
+
+    case 'SHORT_FILM': {
+      const result = await falGenerateShortFilm({
+        brandName: brief.brandName as string,
+        industry:  brief.industry as string,
+        filmType:  (brief.filmType as 'company_profile' | 'product_knowledge') || 'company_profile',
+        duration:  (brief.filmDuration as number) || 120,
+        keyMessages: brief.keyMessages as string[] | undefined,
+        includeVoiceover: brief.includeVoiceover as boolean | undefined,
+      });
+      return {
+        outputUrl: result.videoUrl,
+        jobId: result.jobId,
+        creditsUsed: 0,
+        outputType: 'video',
+      };
+    }
+
+    case 'COPY': {
+      const result = await kieGenerateCopy({
+        brandName:     brief.brandName as string,
+        industry:      brief.industry as string,
+        productService: brief.productService as string | undefined,
+        targetAudience: brief.targetAudience as string,
+        tone:          (brief.tone as 'professional' | 'friendly' | 'playful' | 'luxury' | 'casual'),
+        copyType:      (brief.copyType as 'caption' | 'headline' | 'product_desc' | 'social_post') || 'caption',
+        platform:      (brief.platform as 'instagram' | 'tiktok' | 'youtube' | 'linkedin') || 'instagram',
+        count:         (brief.copyCount as number) || 3,
+      });
+      return {
+        outputUrl: null,
+        jobId: result.jobId,
+        creditsUsed: result.creditsUsed,
+        outputType: 'copy',
+        copies: result.copies,
+      };
+    }
+
+    default:
+      throw new Error(`Unknown service type: ${serviceType}`);
+  }
+}
+
+// ── POST: Create order + run AI generation ────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth();
@@ -44,16 +129,29 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = OrderSchema.parse(body);
 
-    // Create order in DB
-    // NOTE: Replace with actual Drizzle insert when DB is connected
+    // Run AI generation
+    let generationResult;
+    try {
+      generationResult = await runAIGeneration(data.serviceType, data.brief as Record<string, unknown>);
+    } catch (genErr) {
+      const message = genErr instanceof Error ? genErr.message : 'AI generation failed';
+      console.error(`[AI Generation ${data.serviceType}]`, message);
+      return NextResponse.json({ success: false, error: message }, { status: 422 });
+    }
+
+    // Build order record
     const order = {
       id: uuidv4(),
       userId,
       packageId: data.packageId,
       serviceType: data.serviceType,
-      status: 'PENDING',
+      status: 'COMPLETED',
       brief: data.brief,
-      creditsUsed: 0,
+      outputUrl: generationResult.outputUrl,
+      copies: generationResult.copies ?? null,
+      creditsUsed: generationResult.creditsUsed,
+      jobId: generationResult.jobId,
+      outputType: generationResult.outputType,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -61,13 +159,10 @@ export async function POST(req: NextRequest) {
     // TODO: Insert to DB via Drizzle
     // await db.insert(orders).values(order);
 
-    // TODO: Trigger AI generation job (queue with BullMQ / Inngest)
-    // For now, we'll handle this via webhook or background job
-
     return NextResponse.json({
       success: true,
       data: order,
-      message: 'Order created successfully. Generation will begin shortly.',
+      message: 'Order created and AI generation completed.',
     }, { status: 201 });
 
   } catch (err) {
@@ -87,6 +182,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// ── GET: List user's orders ──────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
     const { userId } = await auth();
@@ -95,13 +191,14 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const status = searchParams.get('status');
-    const serviceType = searchParams.get('serviceType');
-    const page = parseInt(searchParams.get('page') || '1');
+    const page  = parseInt(searchParams.get('page')  || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
 
-    // TODO: Query from DB with filters
-    // const orders = await db.select().from(ordersTable).where(and(eq(orders.userId, userId), ...));
+    // TODO: Query from DB
+    // const orders = await db.select().from(ordersTable)
+    //   .where(eq(orders.userId, userId))
+    //   .orderBy(desc(orders.createdAt))
+    //   .limit(limit).offset((page - 1) * limit);
 
     return NextResponse.json({
       success: true,
