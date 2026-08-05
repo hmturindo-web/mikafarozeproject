@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { ClerkProvider } from '@clerk/nextjs';
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
 
@@ -25,22 +24,20 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
-      <html lang="id" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-        <body className="min-h-full flex flex-col">
-          {children}
-          <Toaster
-            position="top-center"
-            toastOptions={{
-              style: {
-                background: 'oklch(0.205 0 0)',
-                color: 'oklch(0.985 0 0)',
-                borderRadius: '0.625rem',
-              },
-            }}
-          />
-        </body>
-      </html>
-    </ClerkProvider>
+    <html lang="id" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: 'oklch(0.205 0 0)',
+              color: 'oklch(0.985 0 0)',
+              borderRadius: '0.625rem',
+            },
+          }}
+        />
+      </body>
+    </html>
   );
 }

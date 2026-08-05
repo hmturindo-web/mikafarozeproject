@@ -15,7 +15,7 @@ export const userRoleEnum = pgEnum('user_role', ['USER', 'ADMIN']);
 
 // ---- Users ----
 export const users = pgTable('users', {
-  id: text('id').primaryKey(), // clerkId
+  id: text('id').primaryKey(), // custom uuid (was clerkId — Clerk removed)
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   phone: text('phone'),

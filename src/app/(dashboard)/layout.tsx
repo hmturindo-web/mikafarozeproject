@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { UserButton } from '@clerk/nextjs';
+import { useEffect, useState } from 'react';
+import { LogOut, User as UserIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Sparkles, Package, CreditCard,
@@ -27,6 +28,21 @@ const ADMIN_ITEMS = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('mik_user');
+    if (stored) {
+      try { setUser(JSON.parse(stored)); } catch {}
+    }
+  }, []);
+
+  function handleSignOut() {
+    localStorage.removeItem('mik_token');
+    localStorage.removeItem('mik_user');
+    window.location.href = '/sign-in';
+  }
+
   const isAdmin = pathname.startsWith('/admin');
 
   const nav = isAdmin ? ADMIN_ITEMS : NAV_ITEMS;
@@ -73,7 +89,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* User button */}
         <div className="p-4 border-t">
-          <UserButton />
+          {user ? (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center">
+                <span className="text-white text-xs font-bold">{user.name?.[0]?.toUpperCase() || 'U'}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{user.name}</div>
+                <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+          ) : (
+            <Link href="/sign-in">
+              <div className="text-sm text-primary font-medium">Sign In</div>
+            </Link>
+          )}
         </div>
       </aside>
 

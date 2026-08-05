@@ -42,7 +42,7 @@ function isProtectedApiPath(pathname: string): boolean {
   return PROTECTED_API_PATHS.some(p => pathname.startsWith(p));
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Check if route needs protection

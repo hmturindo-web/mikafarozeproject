@@ -1,6 +1,6 @@
 'use client';
 
-import { useUser } from '@clerk/nextjs';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -48,17 +48,17 @@ const STATUS_STYLES = {
 };
 
 export default function DashboardPage() {
-  const { user, isLoaded } = useUser();
+  const [userName, setUserName] = useState<string>('there');
 
-  if (!isLoaded) {
-    return (
-      <div className="p-8 flex items-center justify-center h-full">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
-
-  const name = user?.firstName || 'there';
+  useEffect(() => {
+    const stored = localStorage.getItem('mik_user');
+    if (stored) {
+      try {
+        const u = JSON.parse(stored);
+        setUserName(u.name || 'there');
+      } catch {}
+    }
+  }, []);
 
   return (
     <div className="p-8 space-y-8">
@@ -66,7 +66,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Selamat datang, {name} 👋</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Selamat datang, {userName} 👋</h1>
           <p className="text-muted-foreground mt-1">
             Berikut ringkasan aktivitas dan penggunaan paket Anda.
           </p>

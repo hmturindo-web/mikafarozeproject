@@ -116,7 +116,7 @@ export interface OrderBrief {
 // ---- User ----
 export interface User {
   id: string;
-  clerkId: string;
+  // clerkId removed — Clerk no longer used
   email: string;
   name: string;
   phone?: string;
