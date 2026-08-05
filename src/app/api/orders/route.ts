@@ -5,9 +5,9 @@
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+import { verifyJWT } from '@/server/services/auth';
 
 // AI Services
 import { generateImage as kieGenerateImage } from '@/server/services/kie-ai';
@@ -121,10 +121,16 @@ async function runAIGeneration(serviceType: string, brief: Record<string, unknow
 // ── POST: Create order + run AI generation ────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    // Auth: extract Bearer token from header
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
+    const payload = await verifyJWT(token);
+    if (!payload) {
+      return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
+    }
+    const userId = payload.userId;
 
     const body = await req.json();
     const data = OrderSchema.parse(body);
@@ -185,10 +191,11 @@ export async function POST(req: NextRequest) {
 // ── GET: List user's orders ──────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    const payload = await verifyJWT(token);
+    if (!payload) return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
+    const userId = payload.userId;
 
     const { searchParams } = new URL(req.url);
     const page  = parseInt(searchParams.get('page')  || '1');
